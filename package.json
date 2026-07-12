@@ -1,0 +1,19 @@
+{
+  "name": "spotify-heardle",
+  "version": "0.1.0",
+  "description": "Heardle/Hitster game based on your Spotify playlists",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "server": "npm run dev -w server",
+    "client": "npm run dev -w client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
