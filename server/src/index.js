@@ -8,8 +8,22 @@ import { gameRouter } from './routes/game.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// The same backend serves the web dev client (its own origin) and the
+// Android app (Capacitor's WebView always uses https://localhost by default,
+// regardless of what backend it talks to) — both must be allowed.
+const ALLOWED_ORIGINS = [
+  process.env.CLIENT_URL || 'http://127.0.0.1:5173',
+  'https://localhost'
+];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
