@@ -206,21 +206,26 @@ body {
 
 /* Game Page */
 .page.game-page {
+  width: 100%;
   max-width: 900px;
+  min-width: 0;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
 }
 
-/* Applied only to Hitster/Hear-ster: the page itself never scrolls, only
-   .timeline (horizontally) does, via its own overflow-x below.
-   touch-action: none stops mobile WebViews from grabbing horizontal swipes
-   over the timeline as a page-level pan/bounce gesture before they reach
-   .timeline-panel's own scroll container. */
+/* Applied only to Hitster/Hear-ster: the page itself never scrolls
+   vertically, only .timeline (horizontally) does, via its own overflow-x
+   below. touch-action is pan-x (not none) because a descendant's effective
+   touch-action is the intersection with every ancestor's — "none" here
+   would also block .timeline-panel's own pan-x and make the timeline
+   unscrollable on touch devices. overscroll-behavior-y (not the shorthand)
+   keeps vertical bounce/pull-to-refresh contained without interfering with
+   the timeline's horizontal scrolling. */
 .page.game-page.no-scroll {
   overflow: hidden;
-  touch-action: none;
-  overscroll-behavior: none;
+  touch-action: pan-x;
+  overscroll-behavior-y: contain;
 }
 
 .game-header {

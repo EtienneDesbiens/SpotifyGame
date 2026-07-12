@@ -27,6 +27,14 @@ export function useSpotifyPlayer(accessToken) {
     if (!accessToken || hasInitializedRef.current) return;
     hasInitializedRef.current = true;
 
+    // Spotify's Web Playback SDK connection handshake fails transiently and
+    // spuriously with authentication_error/initialization_error even with a
+    // valid, unexpired Premium token (a known SDK flakiness) — reconnecting
+    // resolves it, which is why restarting the app "fixes" it. Retry a few
+    // times with backoff before giving up and surfacing an error.
+    const CONNECT_RETRY_DELAYS_MS = [1000, 2000, 4000];
+    let connectRetryCount = 0;
+
     const createPlayer = () => {
       const player = new window.Spotify.Player({
         name: playerNameRef.current,
@@ -35,6 +43,8 @@ export function useSpotifyPlayer(accessToken) {
       });
 
       player.addListener('ready', async ({ device_id }) => {
+        connectRetryCount = 0;
+
         // The SDK's locally-reported device_id doesn't reliably match what the
         // REST API accepts as a valid device_id right away. Instead, look up
         // our device by its (session-unique) name in the authoritative
@@ -95,14 +105,25 @@ export function useSpotifyPlayer(accessToken) {
         }
       });
 
+      const retryConnect = (logLabel, message, onGiveUp) => {
+        console.error(logLabel, message);
+        if (connectRetryCount >= CONNECT_RETRY_DELAYS_MS.length) {
+          onGiveUp();
+          return;
+        }
+        const delay = CONNECT_RETRY_DELAYS_MS[connectRetryCount];
+        connectRetryCount += 1;
+        setTimeout(() => player.connect(), delay);
+      };
+
       player.addListener('initialization_error', ({ message }) => {
-        console.error('Spotify player initialization error:', message);
-        setError('Failed to initialize Spotify player: ' + message);
+        retryConnect('Spotify player initialization error:', message, () =>
+          setError('Failed to initialize Spotify player: ' + message));
       });
 
       player.addListener('authentication_error', ({ message }) => {
-        console.error('Spotify player authentication error:', message);
-        setError('Spotify authentication failed: ' + message);
+        retryConnect('Spotify player authentication error:', message, () =>
+          setError('Spotify authentication failed: ' + message));
       });
 
       player.addListener('account_error', ({ message }) => {
