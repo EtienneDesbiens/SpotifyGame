@@ -7,6 +7,31 @@ const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 const HEARDLE_SNIPPET_LENGTHS = [1, 2, 4, 7, 11, 16]; // seconds
 const MAX_ATTEMPTS = 6;
 
+// Tracks are large (a big playlist can be several MB of JSON) and don't
+// change during a game, so they're cached here by gameId instead of being
+// round-tripped by the client on every guess/placement. Entries are removed
+// when a game ends; a sweep also clears anything abandoned mid-game.
+const trackCacheByGameId = new Map();
+const GAME_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const cacheTracks = (gameId, tracks) => {
+  trackCacheByGameId.set(gameId, { tracks, lastAccess: Date.now() });
+};
+
+const getCachedTracks = (gameId) => {
+  const entry = trackCacheByGameId.get(gameId);
+  if (!entry) return null;
+  entry.lastAccess = Date.now();
+  return entry.tracks;
+};
+
+setInterval(() => {
+  const cutoff = Date.now() - GAME_TTL_MS;
+  for (const [gameId, entry] of trackCacheByGameId) {
+    if (entry.lastAccess < cutoff) trackCacheByGameId.delete(gameId);
+  }
+}, GAME_TTL_MS).unref();
+
 const getAuthHeader = (req) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) throw new Error('Missing authorization token');
@@ -155,6 +180,7 @@ router.post('/hitster/start', async (req, res) => {
       status: 'playing'
     };
 
+    cacheTracks(session.gameId, tracks);
     res.json(session);
   } catch (error) {
     console.error('Hitster start error:', error.message);
@@ -163,14 +189,19 @@ router.post('/hitster/start', async (req, res) => {
 });
 
 router.post('/hitster/place', (req, res) => {
-  const { gameSession, position, tracks } = req.body;
+  const { gameSession, position } = req.body;
 
-  if (!gameSession || position === undefined || !tracks) {
-    return res.status(400).json({ error: 'Missing gameSession, position, or tracks' });
+  if (!gameSession || position === undefined) {
+    return res.status(400).json({ error: 'Missing gameSession or position' });
   }
 
   if (gameSession.status !== 'playing') {
     return res.status(400).json({ error: 'Game is already over' });
+  }
+
+  const tracks = getCachedTracks(gameSession.gameId);
+  if (!tracks) {
+    return res.status(410).json({ error: 'Game session expired, please start a new game' });
   }
 
   const { timeline, currentTrack, usedTrackIds, score } = gameSession;
@@ -183,6 +214,7 @@ router.post('/hitster/place', (req, res) => {
     (position === timeline.length || newYear <= years[position]);
 
   if (!isCorrect) {
+    trackCacheByGameId.delete(gameSession.gameId);
     return res.json({
       ...gameSession,
       status: 'lost',
@@ -200,6 +232,7 @@ router.post('/hitster/place', (req, res) => {
   const nextTrack = pickNextTrack(tracks, usedTrackIds);
 
   if (!nextTrack) {
+    trackCacheByGameId.delete(gameSession.gameId);
     return res.json({
       ...gameSession,
       timeline: newTimeline,
@@ -265,6 +298,7 @@ router.post('/hearster/start', async (req, res) => {
       status: 'playing'
     };
 
+    cacheTracks(session.gameId, tracks);
     res.json(session);
   } catch (error) {
     console.error('Hear-ster start error:', error.message);
@@ -323,14 +357,19 @@ router.post('/hearster/skip', (req, res) => {
 });
 
 router.post('/hearster/place', (req, res) => {
-  const { gameSession, position, tracks } = req.body;
+  const { gameSession, position } = req.body;
 
-  if (!gameSession || position === undefined || !tracks) {
-    return res.status(400).json({ error: 'Missing gameSession, position, or tracks' });
+  if (!gameSession || position === undefined) {
+    return res.status(400).json({ error: 'Missing gameSession or position' });
   }
 
   if (gameSession.status !== 'playing' || gameSession.phase !== 'placing') {
     return res.status(400).json({ error: 'Not currently placing' });
+  }
+
+  const tracks = getCachedTracks(gameSession.gameId);
+  if (!tracks) {
+    return res.status(410).json({ error: 'Game session expired, please start a new game' });
   }
 
   const { timeline, currentTrack, usedTrackIds, score } = gameSession;
@@ -343,6 +382,7 @@ router.post('/hearster/place', (req, res) => {
     (position === timeline.length || newYear <= years[position]);
 
   if (!isCorrect) {
+    trackCacheByGameId.delete(gameSession.gameId);
     return res.json({
       ...gameSession,
       status: 'lost',
@@ -360,6 +400,7 @@ router.post('/hearster/place', (req, res) => {
   const nextTrack = pickNextTrack(tracks, usedTrackIds);
 
   if (!nextTrack) {
+    trackCacheByGameId.delete(gameSession.gameId);
     return res.json({
       ...gameSession,
       timeline: newTimeline,

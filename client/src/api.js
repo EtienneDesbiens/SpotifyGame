@@ -102,11 +102,10 @@ export const api = {
     return response.data;
   },
 
-  async placeHitsterCard(gameSession, position, tracks) {
+  async placeHitsterCard(gameSession, position) {
     const response = await client.post(`${API_URL}/game/hitster/place`, {
       gameSession,
-      position,
-      tracks
+      position
     });
     return response.data;
   },
@@ -137,11 +136,10 @@ export const api = {
     return response.data;
   },
 
-  async placeHearsterCard(gameSession, position, tracks) {
+  async placeHearsterCard(gameSession, position) {
     const response = await client.post(`${API_URL}/game/hearster/place`, {
       gameSession,
-      position,
-      tracks
+      position
     });
     return response.data;
   },

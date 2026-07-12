@@ -103,7 +103,7 @@ export function HearsterGame({ playlist, onBack, spotifyPlayer }) {
 
   const handlePlaceCard = async (position) => {
     try {
-      const updated = await api.placeHearsterCard(gameSession, position, playlist.tracks);
+      const updated = await api.placeHearsterCard(gameSession, position);
       const placedCard = updated.timeline.find(
         c => !gameSession.timeline.some(existing => existing.id === c.id)
       );
@@ -127,12 +127,12 @@ export function HearsterGame({ playlist, onBack, spotifyPlayer }) {
   };
 
   if (loading) {
-    return <div className="page game-page"><div className="loading">Starting game...</div></div>;
+    return <div className="page game-page no-scroll"><div className="loading">Starting game...</div></div>;
   }
 
   if (error || playerError) {
     return (
-      <div className="page game-page">
+      <div className="page game-page no-scroll">
         <div className="error">{error || playerError}</div>
         <button onClick={onBack} className="btn">Back to Playlists</button>
       </div>
@@ -140,7 +140,7 @@ export function HearsterGame({ playlist, onBack, spotifyPlayer }) {
   }
 
   if (!gameSession) {
-    return <div className="page game-page"><div className="loading">Loading...</div></div>;
+    return <div className="page game-page no-scroll"><div className="loading">Loading...</div></div>;
   }
 
   const isGameOver = gameSession.status !== 'playing';
@@ -150,11 +150,11 @@ export function HearsterGame({ playlist, onBack, spotifyPlayer }) {
   const currentSnippetLength = snippetLengths[gameSession.attempt] || snippetLengths[snippetLengths.length - 1];
 
   return (
-    <div className="page game-page">
+    <div className="page game-page no-scroll">
       <div className="game-header">
         <button onClick={onBack} className="btn btn-small">← Back</button>
         <h2>{playlist.name} — Hear-ster</h2>
-        <div className="attempts">Score: {score}</div>
+        <div className="score-badge">Score: {score}</div>
       </div>
 
       <div className="hitster-content">
@@ -254,26 +254,28 @@ export function HearsterGame({ playlist, onBack, spotifyPlayer }) {
           </div>
         )}
 
-        <div className="timeline">
-          {isPlacing && (
-            <button className="timeline-gap" onClick={() => handlePlaceCard(0)}>+</button>
-          )}
-          {timeline.map((card, i) => {
-            const isFailedCard = isGameOver && lastResult?.correct === false && card.id === lastResult.card?.id;
-            return (
-              <div key={card.id} className="timeline-track">
-                <div className="timeline-card">
-                  {card.album.image && <img src={card.album.image} alt={card.name} />}
-                  <div className={`timeline-year ${isFailedCard ? 'timeline-year-wrong' : ''}`}>{card.releaseYear}</div>
-                  <div className="timeline-name">{card.name}</div>
-                  <div className="timeline-artist">{card.artists.join(', ')}</div>
+        <div className="timeline-panel">
+          <div className="timeline">
+            {isPlacing && (
+              <button className="timeline-gap" onClick={() => handlePlaceCard(0)}>+</button>
+            )}
+            {timeline.map((card, i) => {
+              const isFailedCard = isGameOver && lastResult?.correct === false && card.id === lastResult.card?.id;
+              return (
+                <div key={card.id} className="timeline-track">
+                  <div className="timeline-card">
+                    {card.album.image && <img src={card.album.image} alt={card.name} />}
+                    <div className={`timeline-year ${isFailedCard ? 'timeline-year-wrong' : ''}`}>{card.releaseYear}</div>
+                    <div className="timeline-name">{card.name}</div>
+                    <div className="timeline-artist">{card.artists.join(', ')}</div>
+                  </div>
+                  {isPlacing && (
+                    <button className="timeline-gap" onClick={() => handlePlaceCard(i + 1)}>+</button>
+                  )}
                 </div>
-                {isPlacing && (
-                  <button className="timeline-gap" onClick={() => handlePlaceCard(i + 1)}>+</button>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

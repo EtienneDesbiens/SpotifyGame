@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Spotify Heardle</string>
-    <string name="title_activity_main">Spotify Heardle</string>
+    <string name="app_name">Hear-ster</string>
+    <string name="title_activity_main">Hear-ster</string>
     <string name="package_name">com.spotifyheardle.app</string>
     <string name="custom_url_scheme">com.spotifyheardle.app</string>
 </resources>

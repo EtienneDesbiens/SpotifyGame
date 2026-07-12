@@ -23,6 +23,7 @@ body {
   background: var(--dark);
   color: var(--light);
   line-height: 1.6;
+  overflow-x: hidden;
 }
 
 .app {
@@ -204,15 +205,29 @@ body {
 }
 
 /* Game Page */
-.game-page {
+.page.game-page {
   max-width: 900px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Applied only to Hitster/Hear-ster: the page itself never scrolls, only
+   .timeline (horizontally) does, via its own overflow-x below.
+   touch-action: none stops mobile WebViews from grabbing horizontal swipes
+   over the timeline as a page-level pan/bounce gesture before they reach
+   .timeline-panel's own scroll container. */
+.page.game-page.no-scroll {
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 .game-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--spacing);
   margin-bottom: calc(var(--spacing) * 2);
   padding-bottom: var(--spacing);
   border-bottom: 1px solid var(--gray);
@@ -221,6 +236,24 @@ body {
 .game-header h2 {
   flex: 1;
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-header .attempts,
+.game-header .score-badge {
+  flex-shrink: 0;
+}
+
+.score-badge {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--dark);
+  background: var(--primary);
+  padding: 6px 14px;
+  border-radius: 999px;
 }
 
 .attempts {
@@ -354,6 +387,9 @@ body {
   padding: calc(var(--spacing) * 2);
   background: var(--gray);
   border-radius: var(--radius);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .result {
@@ -460,7 +496,14 @@ body {
 /* Hitster */
 .hitster-content {
   max-width: 900px;
+  width: 100%;
   margin: 0 auto;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .hitster-current-card {
@@ -479,12 +522,27 @@ body {
   color: var(--gray-light);
 }
 
+.timeline-panel {
+  background: var(--gray);
+  border-radius: var(--radius);
+  padding: 0 var(--spacing);
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
 .timeline {
   display: flex;
   align-items: stretch;
   gap: 0;
-  overflow-x: auto;
   padding: var(--spacing) 0;
+  width: max-content;
 }
 
 .timeline-track {
@@ -561,6 +619,9 @@ body {
   background: var(--gray);
   border-radius: var(--radius);
   padding: var(--spacing);
+  flex-shrink: 0;
+  max-height: 160px;
+  overflow-y: auto;
 }
 
 .guesses-history h4 {
@@ -649,5 +710,62 @@ body {
 
   .playlists-grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+/* Phone-width portrait screens */
+@media (max-width: 480px) {
+  .page {
+    padding: 12px;
+  }
+
+  .login-container h1 {
+    font-size: 2rem;
+  }
+
+  .game-header {
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .game-header h2 {
+    order: 3;
+    flex-basis: 100%;
+    white-space: normal;
+  }
+
+  .result-actions {
+    flex-direction: column;
+  }
+
+  .result-actions .btn {
+    max-width: none;
+  }
+
+  .mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .playlists-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+  }
+
+  .timeline-card {
+    width: 110px;
+    padding: 10px;
+  }
+
+  .timeline-gap {
+    width: 28px;
+  }
+
+  .hitster-current-card .album-art-hidden {
+    width: 130px;
+  }
+
+  .album-art-hidden {
+    font-size: 3rem;
   }
 }
