@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { api } from '../api';
+
+const isNative = Capacitor.isNativePlatform();
+const REDIRECT_URI = isNative ? 'spotifyheardle://callback' : 'http://127.0.0.1:5173/callback';
 
 export function LoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -7,6 +13,22 @@ export function LoginPage({ onLoginSuccess }) {
   const hasHandledCallbackRef = useRef(false);
 
   useEffect(() => {
+    if (isNative) {
+      // The native app's OAuth redirect isn't a real HTTP address — Spotify
+      // redirects to the custom URL scheme registered in AndroidManifest.xml,
+      // and the OS hands that URL back to the app via this listener instead
+      // of a page navigation.
+      const listener = App.addListener('appUrlOpen', ({ url }) => {
+        Browser.close().catch(() => {});
+        const code = new URL(url).searchParams.get('code');
+        if (code && !hasHandledCallbackRef.current) {
+          hasHandledCallbackRef.current = true;
+          handleCallback(code);
+        }
+      });
+      return () => { listener.then(l => l.remove()); };
+    }
+
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
 
@@ -18,6 +40,8 @@ export function LoginPage({ onLoginSuccess }) {
     }
   }, []);
 
+  // Cold-start retries against a sleeping free-tier backend are handled
+  // transparently by the shared axios instance in api.js.
   const handleCallback = async (code) => {
     const stored = sessionStorage.getItem('codeVerifier');
     if (!stored) {
@@ -27,13 +51,15 @@ export function LoginPage({ onLoginSuccess }) {
 
     try {
       setLoading(true);
-      const { accessToken, refreshToken, expiresIn } = await api.exchangeCode(code, stored);
+      const { accessToken, refreshToken, expiresIn } = await api.exchangeCode(code, stored, REDIRECT_URI);
       const user = await api.fetchUserProfile(accessToken);
       onLoginSuccess(accessToken, refreshToken, user, expiresIn);
       sessionStorage.removeItem('codeVerifier');
-      window.history.replaceState({}, document.title, window.location.pathname);
+      if (!isNative) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to log in');
+      setError(err.response?.data?.error || 'Failed to log in. Please try again.');
       sessionStorage.removeItem('codeVerifier');
     } finally {
       setLoading(false);
@@ -44,9 +70,15 @@ export function LoginPage({ onLoginSuccess }) {
     try {
       setLoading(true);
       setError(null);
-      const { url, codeVerifier } = await api.getLoginUrl();
+      const { url, codeVerifier } = await api.getLoginUrl(REDIRECT_URI);
       sessionStorage.setItem('codeVerifier', codeVerifier);
-      window.location.href = url;
+
+      if (isNative) {
+        await Browser.open({ url });
+        setLoading(false);
+      } else {
+        window.location.href = url;
+      }
     } catch (err) {
       setError('Failed to start login');
       setLoading(false);

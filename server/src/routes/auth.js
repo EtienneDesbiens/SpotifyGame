@@ -7,7 +7,13 @@ const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
-const REDIRECT_URI = process.env.REDIRECT_URI || 'http://127.0.0.1:5173/callback';
+const WEB_REDIRECT_URI = process.env.REDIRECT_URI || 'http://127.0.0.1:5173/callback';
+const NATIVE_REDIRECT_URI = process.env.NATIVE_REDIRECT_URI || 'spotifyheardle://callback';
+// The same backend serves both the web dev client (loopback redirect) and
+// the Android app (custom-scheme redirect) — only these two exact values are
+// ever accepted, never an arbitrary client-supplied URI.
+const ALLOWED_REDIRECT_URIS = [WEB_REDIRECT_URI, NATIVE_REDIRECT_URI];
+
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 
@@ -30,12 +36,15 @@ const generateCodeChallenge = () => {
 router.post('/login', (req, res) => {
   const { codeVerifier, codeChallenge } = generateCodeChallenge();
   const state = crypto.randomBytes(16).toString('hex');
+  const redirectUri = ALLOWED_REDIRECT_URIS.includes(req.body?.redirectUri)
+    ? req.body.redirectUri
+    : WEB_REDIRECT_URI;
 
   res.json({
     url: `${SPOTIFY_AUTH_URL}?${new URLSearchParams({
       client_id: CLIENT_ID,
       response_type: 'code',
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
       code_challenge_method: 'S256',
       code_challenge: codeChallenge,
       state,
@@ -48,6 +57,9 @@ router.post('/login', (req, res) => {
 
 router.post('/callback', async (req, res) => {
   const { code, codeVerifier } = req.body;
+  const redirectUri = ALLOWED_REDIRECT_URIS.includes(req.body?.redirectUri)
+    ? req.body.redirectUri
+    : WEB_REDIRECT_URI;
 
   if (!code || !codeVerifier) {
     return res.status(400).json({ error: 'Missing code or codeVerifier' });
@@ -57,7 +69,7 @@ router.post('/callback', async (req, res) => {
     const response = await axios.post(SPOTIFY_TOKEN_URL, new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code_verifier: codeVerifier

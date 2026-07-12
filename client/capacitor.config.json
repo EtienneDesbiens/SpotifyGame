@@ -1,0 +1,5 @@
+{
+  "appId": "com.spotifyheardle.app",
+  "appName": "Spotify Heardle",
+  "webDir": "dist"
+}

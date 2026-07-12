@@ -18,3 +18,11 @@ build/
 # Testing
 coverage/
 .nyc_output/
+
+# Android / Capacitor
+.gradle/
+local.properties
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/

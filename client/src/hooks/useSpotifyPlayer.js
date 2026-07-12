@@ -134,15 +134,16 @@ export function useSpotifyPlayer(accessToken) {
     };
   }, []);
 
-  const playSnippet = async (trackId, snippetLength) => {
-    if (!trackId || !snippetLength || !deviceIdRef.current) return;
+  // Spotify's Connect API rejects playback commands issued in quick
+  // succession with 403 "Restriction violated" — this game's play-then-
+  // auto-pause pattern triggers it fairly often. It's transient, so retry a
+  // couple of times with a short delay before surfacing it as an error.
+  const RESTRICTION_RETRY_DELAYS_MS = [600, 1200];
 
-    // Cancel any pending auto-pause from a previous (now-stale) snippet play,
-    // otherwise it fires on its original schedule and cuts this one off early.
-    clearTimeout(pauseTimeoutRef.current);
+  const sendPlayCommand = async (trackId) => {
+    const trackUri = `spotify:track:${trackId}`;
 
-    try {
-      const trackUri = `spotify:track:${trackId}`;
+    for (let attempt = 0; ; attempt++) {
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`, {
         method: 'PUT',
         headers: {
@@ -152,12 +153,28 @@ export function useSpotifyPlayer(accessToken) {
         body: JSON.stringify({ uris: [trackUri], position_ms: 0 })
       });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
+      if (response.ok) return response;
+
+      const body = await response.json().catch(() => null);
+      const isRestrictionViolation = response.status === 403;
+      if (!isRestrictionViolation || attempt >= RESTRICTION_RETRY_DELAYS_MS.length) {
         console.error('Spotify play command failed:', response.status, body);
-        setError(`Playback failed (${response.status}): ${body?.error?.message || 'Unknown error'}`);
-        return;
+        throw Object.assign(new Error(body?.error?.message || 'Unknown error'), { status: response.status });
       }
+
+      await new Promise(r => setTimeout(r, RESTRICTION_RETRY_DELAYS_MS[attempt]));
+    }
+  };
+
+  const playSnippet = async (trackId, snippetLength) => {
+    if (!trackId || !snippetLength || !deviceIdRef.current) return;
+
+    // Cancel any pending auto-pause from a previous (now-stale) snippet play,
+    // otherwise it fires on its original schedule and cuts this one off early.
+    clearTimeout(pauseTimeoutRef.current);
+
+    try {
+      await sendPlayCommand(trackId);
 
       pauseTimeoutRef.current = setTimeout(() => {
         fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${deviceIdRef.current}`, {
@@ -167,7 +184,7 @@ export function useSpotifyPlayer(accessToken) {
       }, snippetLength * 1000);
     } catch (err) {
       console.error('Failed to play snippet', err);
-      setError('Failed to play snippet');
+      setError(`Playback failed${err.status ? ` (${err.status})` : ''}: ${err.message}`);
     }
   };
 
@@ -179,20 +196,7 @@ export function useSpotifyPlayer(accessToken) {
     clearTimeout(pauseTimeoutRef.current);
 
     try {
-      const trackUri = `spotify:track:${trackId}`;
-      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessTokenRef.current}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ uris: [trackUri], position_ms: 0 })
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        console.error('Full track playback failed:', response.status, body);
-      }
+      await sendPlayCommand(trackId);
     } catch (err) {
       console.error('Failed to play full track', err);
     }
