@@ -166,7 +166,7 @@ export function useSpotifyPlayer(accessToken) {
   const RESTRICTION_RETRY_DELAYS_MS = [1500, 3000, 5000];
   const lastCommandAtRef = useRef(0);
 
-  const sendPlayCommand = async (trackId) => {
+  const sendPlayCommand = async (trackId, positionMs = 0) => {
     const trackUri = `spotify:track:${trackId}`;
 
     for (let attempt = 0; ; attempt++) {
@@ -180,7 +180,7 @@ export function useSpotifyPlayer(accessToken) {
           Authorization: `Bearer ${accessTokenRef.current}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ uris: [trackUri], position_ms: 0 })
+        body: JSON.stringify({ uris: [trackUri], position_ms: positionMs })
       });
 
       if (response.ok) return response;
@@ -226,7 +226,7 @@ export function useSpotifyPlayer(accessToken) {
     }
   };
 
-  const playFullTrack = async (trackId) => {
+  const playFullTrack = async (trackId, positionMs = 0) => {
     if (!trackId || !deviceIdRef.current) return;
 
     // A pending snippet auto-pause must not cut off full-track playback
@@ -234,7 +234,7 @@ export function useSpotifyPlayer(accessToken) {
     clearTimeout(pauseTimeoutRef.current);
 
     try {
-      await sendPlayCommand(trackId);
+      await sendPlayCommand(trackId, positionMs);
     } catch (err) {
       console.error('Failed to play full track', err);
     }

@@ -7,7 +7,7 @@ const DEFAULT_WIN_SCORE = 5;
 const WIN_SCORE_OPTIONS = [3, 5, 7, 10];
 
 export function DuelGame({ playlist, onBack, spotifyPlayer }) {
-  const { deviceReady, error: playerError, playSnippet, playFullTrack, pause } = spotifyPlayer;
+  const { deviceReady, error: playerError, playFullTrack, pause } = spotifyPlayer;
 
   const [gameSession, setGameSession] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -22,23 +22,24 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const [filteredTracks, setFilteredTracks] = useState([]);
   const [, setTimerTick] = useState(0);
 
-  const roundStartAtRef = useRef(0);
   const guessStartAtRef = useRef(0);
-  const replayStartAtRef = useRef(0);
-  const replayDurationSecondsRef = useRef(0);
+  // Tracks how far into the track playback has reached (ms), and the wall-clock
+  // time the current playback segment started, so a team's failed guess can
+  // resume the song from exactly where the previous team buzzed in rather than
+  // restarting it from 0.
+  const trackPositionRef = useRef(0);
+  const segmentStartAtRef = useRef(0);
   const timerIntervalRef = useRef(null);
-  const replayTimeoutRef = useRef(null);
 
   useEffect(() => {
     return () => {
       pause();
       clearInterval(timerIntervalRef.current);
-      clearTimeout(replayTimeoutRef.current);
     };
   }, [playlist]);
 
   useEffect(() => {
-    if (roundPhase === 'guessing' || roundPhase === 'replay') {
+    if (roundPhase === 'guessing') {
       timerIntervalRef.current = setInterval(() => setTimerTick(t => t + 1), 100);
       return () => clearInterval(timerIntervalRef.current);
     }
@@ -60,15 +61,15 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   };
 
   const startRound = (session) => {
-    clearTimeout(replayTimeoutRef.current);
     setTeamStatus({ red: 'active', blue: 'active' });
     setActiveTeam(null);
     setLastRoundResult(null);
     setSearchInput('');
     setFilteredTracks([]);
     setRoundPhase('listening');
-    roundStartAtRef.current = Date.now();
-    playFullTrack(session.currentTrack.id);
+    trackPositionRef.current = 0;
+    segmentStartAtRef.current = Date.now();
+    playFullTrack(session.currentTrack.id, 0);
   };
 
   const handlePlayAgain = () => {
@@ -91,6 +92,7 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const handleBuzz = (team) => {
     if (roundPhase !== 'listening' || teamStatus[team] !== 'active') return;
     pause();
+    trackPositionRef.current += Date.now() - segmentStartAtRef.current;
     setActiveTeam(team);
     guessStartAtRef.current = Date.now();
     setRoundPhase('guessing');
@@ -138,25 +140,15 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
     setFilteredTracks([]);
 
     if (updatedStatus[otherTeam] === 'active') {
-      const elapsedListenMs = guessStartAtRef.current - roundStartAtRef.current;
-      const elapsedGuessMs = Date.now() - guessStartAtRef.current;
-      const trackSeconds = Math.floor(gameSession.currentTrack.durationMs / 1000);
-      const replaySeconds = Math.max(
-        1,
-        Math.min(Math.ceil((elapsedListenMs + elapsedGuessMs) / 1000), trackSeconds)
-      );
-
+      // Resume the song for the other team from exactly where this team
+      // buzzed in, rather than restarting it — they can buzz in or skip
+      // just like the initial listening phase.
       setActiveTeam(null);
-      setRoundPhase('replay');
-      replayStartAtRef.current = Date.now();
-      replayDurationSecondsRef.current = replaySeconds;
-      playSnippet(gameSession.currentTrack.id, replaySeconds);
-
-      replayTimeoutRef.current = setTimeout(() => {
-        setActiveTeam(otherTeam);
-        guessStartAtRef.current = Date.now();
-        setRoundPhase('guessing');
-      }, replaySeconds * 1000);
+      setRoundPhase('listening');
+      const durationMs = gameSession.currentTrack.durationMs;
+      const resumeMs = Math.min(trackPositionRef.current, Math.max(0, durationMs - 1000));
+      segmentStartAtRef.current = Date.now();
+      playFullTrack(gameSession.currentTrack.id, resumeMs);
     } else {
       resolveRoundFailure();
     }
@@ -257,9 +249,6 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const elapsedGuessSeconds = roundPhase === 'guessing'
     ? ((Date.now() - guessStartAtRef.current) / 1000).toFixed(1)
     : null;
-  const replayRemainingSeconds = roundPhase === 'replay'
-    ? Math.max(0, replayDurationSecondsRef.current - (Date.now() - replayStartAtRef.current) / 1000).toFixed(1)
-    : null;
 
   const renderPanel = (team) => {
     const isActive = activeTeam === team;
@@ -270,18 +259,17 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
         <div className="duel-panel-inner">
           <div className="duel-panel-label">{TEAM_LABEL[team]}</div>
 
-          {roundPhase === 'listening' && (
+          {roundPhase === 'listening' && status === 'active' && (
             <div className="duel-panel-actions">
               <button
                 className="btn duel-buzz-btn"
-                disabled={status !== 'active' || !deviceReady}
+                disabled={!deviceReady}
                 onClick={() => handleBuzz(team)}
               >
                 Guess!
               </button>
               <button
                 className="btn btn-secondary duel-skip-btn"
-                disabled={status !== 'active'}
                 onClick={() => handleSkip(team)}
               >
                 Don't know, skip it!
@@ -289,11 +277,12 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
             </div>
           )}
 
-          {roundPhase === 'replay' && (
-            <div className="duel-waiting">
-              <div>Replaying the song for {TEAM_LABEL[Object.keys(teamStatus).find(t => teamStatus[t] === 'active')]}...</div>
-              <div className="duel-timer">{replayRemainingSeconds}s</div>
-            </div>
+          {roundPhase === 'listening' && status === 'failed' && (
+            <div className="duel-waiting">Out for this round — the song has resumed for the other team.</div>
+          )}
+
+          {roundPhase === 'listening' && status === 'skipped' && (
+            <div className="duel-waiting">Skipped — waiting on the other team.</div>
           )}
 
           {roundPhase === 'guessing' && !isActive && (
@@ -351,7 +340,7 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
       </div>
 
       <div className="hitster-content">
-        {!isGameOver && ['listening', 'guessing', 'replay'].includes(roundPhase) && (
+        {!isGameOver && ['listening', 'guessing'].includes(roundPhase) && (
           <div className="duel-buzzer-area">
             {renderPanel('red')}
             {renderPanel('blue')}
@@ -411,26 +400,24 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
           </div>
         )}
 
-        <div className="timeline-panel">
-          <div className="timeline">
-            {roundPhase === 'placing' && !isGameOver && (
+        {!isGameOver && roundPhase === 'placing' && (
+          <div className="timeline-panel">
+            <div className="timeline">
               <button className="timeline-gap" onClick={() => handlePlaceCard(0)}>+</button>
-            )}
-            {timeline.map((card, i) => (
-              <div key={card.id} className="timeline-track">
-                <div className="timeline-card">
-                  {card.album.image && <img src={card.album.image} alt={card.name} />}
-                  <div className="timeline-year">{card.releaseYear}</div>
-                  <div className="timeline-name">{card.name}</div>
-                  <div className="timeline-artist">{card.artists.join(', ')}</div>
-                </div>
-                {roundPhase === 'placing' && !isGameOver && (
+              {timeline.map((card, i) => (
+                <div key={card.id} className="timeline-track">
+                  <div className="timeline-card">
+                    {card.album.image && <img src={card.album.image} alt={card.name} />}
+                    <div className="timeline-year">{card.releaseYear}</div>
+                    <div className="timeline-name">{card.name}</div>
+                    <div className="timeline-artist">{card.artists.join(', ')}</div>
+                  </div>
                   <button className="timeline-gap" onClick={() => handlePlaceCard(i + 1)}>+</button>
-                )}
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
