@@ -3,14 +3,16 @@ import { api } from '../api';
 
 const OTHER_TEAM = { red: 'blue', blue: 'red' };
 const TEAM_LABEL = { red: 'Red', blue: 'Blue' };
-const WIN_SCORE = 5;
+const DEFAULT_WIN_SCORE = 5;
+const WIN_SCORE_OPTIONS = [3, 5, 7, 10];
 
 export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const { deviceReady, error: playerError, playSnippet, playFullTrack, pause } = spotifyPlayer;
 
   const [gameSession, setGameSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [winScoreChoice, setWinScoreChoice] = useState(DEFAULT_WIN_SCORE);
 
   const [roundPhase, setRoundPhase] = useState('listening');
   const [teamStatus, setTeamStatus] = useState({ red: 'active', blue: 'active' });
@@ -22,12 +24,12 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
 
   const roundStartAtRef = useRef(0);
   const guessStartAtRef = useRef(0);
+  const replayStartAtRef = useRef(0);
+  const replayDurationSecondsRef = useRef(0);
   const timerIntervalRef = useRef(null);
   const replayTimeoutRef = useRef(null);
 
   useEffect(() => {
-    startGame();
-
     return () => {
       pause();
       clearInterval(timerIntervalRef.current);
@@ -36,16 +38,17 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   }, [playlist]);
 
   useEffect(() => {
-    if (roundPhase === 'guessing') {
+    if (roundPhase === 'guessing' || roundPhase === 'replay') {
       timerIntervalRef.current = setInterval(() => setTimerTick(t => t + 1), 100);
       return () => clearInterval(timerIntervalRef.current);
     }
   }, [roundPhase]);
 
-  const startGame = async () => {
+  const startGame = async (winScore) => {
     try {
       setLoading(true);
-      const session = await api.startDuelGame(playlist.id, playlist.tracks);
+      setError(null);
+      const session = await api.startDuelGame(playlist.id, playlist.tracks, winScore);
       setGameSession(session);
       startRound(session);
     } catch (err) {
@@ -69,7 +72,7 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   };
 
   const handlePlayAgain = () => {
-    startGame();
+    startGame(gameSession.winScore);
   };
 
   const handleSearchChange = (value) => {
@@ -145,6 +148,8 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
 
       setActiveTeam(null);
       setRoundPhase('replay');
+      replayStartAtRef.current = Date.now();
+      replayDurationSecondsRef.current = replaySeconds;
       playSnippet(gameSession.currentTrack.id, replaySeconds);
 
       replayTimeoutRef.current = setTimeout(() => {
@@ -208,13 +213,52 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   }
 
   if (!gameSession) {
-    return <div className="page game-page no-scroll"><div className="loading">Loading...</div></div>;
+    return (
+      <div className="page game-page">
+        <div className="game-header">
+          <button onClick={onBack} className="btn btn-small">← Back</button>
+          <h2>{playlist.name} — Duel</h2>
+        </div>
+
+        <div className="duel-setup">
+          <h3>How many points to win?</h3>
+          <div className="duel-winscore-options">
+            {WIN_SCORE_OPTIONS.map(n => (
+              <button
+                key={n}
+                className={`btn ${winScoreChoice === n ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setWinScoreChoice(n)}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <label className="duel-winscore-custom">
+            Custom
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={winScoreChoice}
+              onChange={e => setWinScoreChoice(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+              className="search-input"
+            />
+          </label>
+          <button className="btn btn-primary btn-large" onClick={() => startGame(winScoreChoice)}>
+            Start Duel
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const isGameOver = gameSession.status === 'finished' || roundPhase === 'game-over';
   const { timeline, currentTrack, scores } = gameSession;
   const elapsedGuessSeconds = roundPhase === 'guessing'
     ? ((Date.now() - guessStartAtRef.current) / 1000).toFixed(1)
+    : null;
+  const replayRemainingSeconds = roundPhase === 'replay'
+    ? Math.max(0, replayDurationSecondsRef.current - (Date.now() - replayStartAtRef.current) / 1000).toFixed(1)
     : null;
 
   const renderPanel = (team) => {
@@ -247,7 +291,8 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
 
           {roundPhase === 'replay' && (
             <div className="duel-waiting">
-              Replaying the song for {TEAM_LABEL[Object.keys(teamStatus).find(t => teamStatus[t] === 'active')]}...
+              <div>Replaying the song for {TEAM_LABEL[Object.keys(teamStatus).find(t => teamStatus[t] === 'active')]}...</div>
+              <div className="duel-timer">{replayRemainingSeconds}s</div>
             </div>
           )}
 
@@ -301,15 +346,15 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
           <span className="duel-score-red">Red: {scores.red}</span>
           {' — '}
           <span className="duel-score-blue">Blue: {scores.blue}</span>
-          {` (first to ${WIN_SCORE})`}
+          {` (first to ${gameSession.winScore})`}
         </div>
       </div>
 
       <div className="hitster-content">
         {!isGameOver && ['listening', 'guessing', 'replay'].includes(roundPhase) && (
           <div className="duel-buzzer-area">
-            {renderPanel('blue')}
             {renderPanel('red')}
+            {renderPanel('blue')}
           </div>
         )}
 

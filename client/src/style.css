@@ -544,12 +544,16 @@ body {
 
 .duel-buzzer-area {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   gap: calc(var(--spacing) * 1.5);
   margin-bottom: calc(var(--spacing) * 2);
+  min-height: 0;
 }
 
 .duel-panel {
+  flex: 1;
+  min-width: 0;
   border-radius: var(--radius);
   border: 3px solid;
   padding: var(--spacing);
@@ -561,7 +565,6 @@ body {
 
 .duel-panel-blue {
   border-color: #3b82f6;
-  transform: rotate(180deg);
 }
 
 .duel-panel-inner {
@@ -622,6 +625,34 @@ body {
 
 .duel-team-blue {
   color: #3b82f6;
+}
+
+.duel-setup {
+  max-width: 400px;
+  margin: calc(var(--spacing) * 2) auto 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 1.5);
+}
+
+.duel-winscore-options {
+  display: flex;
+  gap: var(--spacing);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.duel-winscore-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing);
+  justify-content: center;
+  color: var(--gray-light);
+}
+
+.duel-winscore-custom .search-input {
+  width: 80px;
 }
 
 .timeline-panel {
@@ -865,6 +896,28 @@ body {
 
   .hitster-current-card .album-art-hidden {
     width: 130px;
+  }
+
+  .duel-buzzer-area {
+    gap: var(--spacing);
+  }
+
+  .duel-panel {
+    padding: 10px;
+  }
+
+  .duel-buzz-btn {
+    font-size: 1.1rem;
+    padding: var(--spacing);
+  }
+
+  .duel-skip-btn {
+    font-size: 0.8rem;
+    padding: 8px;
+  }
+
+  .duel-winscore-options {
+    gap: 8px;
   }
 
   .album-art-hidden {

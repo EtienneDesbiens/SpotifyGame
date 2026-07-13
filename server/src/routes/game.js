@@ -437,8 +437,16 @@ router.get('/hearster/snippet-lengths', (req, res) => {
 });
 
 // Duel: two teams race to buzz in on a shared song, guess it, and place it
-// on a shared timeline. First team to WIN_SCORE points wins.
-const WIN_SCORE = 5;
+// on a shared timeline. First team to gameSession.winScore points wins.
+const DEFAULT_WIN_SCORE = 5;
+const MIN_WIN_SCORE = 1;
+const MAX_WIN_SCORE = 50;
+
+const normalizeWinScore = (winScore) => {
+  const parsed = parseInt(winScore, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_WIN_SCORE;
+  return Math.min(MAX_WIN_SCORE, Math.max(MIN_WIN_SCORE, parsed));
+};
 
 const advanceDuelTrack = (gameSession, tracks) => {
   const nextTrack = pickNextTrack(tracks, gameSession.usedTrackIds);
@@ -468,7 +476,7 @@ const advanceDuelTrack = (gameSession, tracks) => {
 };
 
 router.post('/duel/start', async (req, res) => {
-  const { playlistId, tracks } = req.body;
+  const { playlistId, tracks, winScore } = req.body;
 
   if (!playlistId || !tracks || tracks.length === 0) {
     return res.status(400).json({ error: 'Missing playlistId or tracks' });
@@ -495,6 +503,7 @@ router.post('/duel/start', async (req, res) => {
       },
       usedTrackIds: [seedTrack.id, nextTrack.id],
       scores: { red: 0, blue: 0 },
+      winScore: normalizeWinScore(winScore),
       status: 'playing',
       winner: null
     };
@@ -561,7 +570,7 @@ router.post('/duel/place', (req, res) => {
   const newTimeline = [...timeline, placedCard].sort((a, b) => a.releaseYear - b.releaseYear);
   const scores = { ...gameSession.scores, [team]: gameSession.scores[team] + 1 };
 
-  if (scores[team] >= WIN_SCORE) {
+  if (scores[team] >= gameSession.winScore) {
     trackCacheByGameId.delete(gameSession.gameId);
     return res.json({
       ...gameSession,

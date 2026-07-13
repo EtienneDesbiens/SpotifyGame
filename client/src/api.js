@@ -149,10 +149,11 @@ export const api = {
     return response.data;
   },
 
-  async startDuelGame(playlistId, tracks) {
+  async startDuelGame(playlistId, tracks, winScore) {
     const response = await client.post(`${API_URL}/game/duel/start`, {
       playlistId,
-      tracks
+      tracks,
+      winScore
     });
     return response.data;
   },
