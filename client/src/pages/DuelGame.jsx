@@ -7,7 +7,7 @@ const DEFAULT_WIN_SCORE = 5;
 const WIN_SCORE_OPTIONS = [3, 5, 7, 10];
 
 export function DuelGame({ playlist, onBack, spotifyPlayer }) {
-  const { deviceReady, error: playerError, playFullTrack, pause } = spotifyPlayer;
+  const { deviceReady, error: playerError, playSnippet, playFullTrack, pause } = spotifyPlayer;
 
   const [gameSession, setGameSession] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -21,6 +21,12 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const [searchInput, setSearchInput] = useState('');
   const [filteredTracks, setFilteredTracks] = useState([]);
   const [guessElapsedMs, setGuessElapsedMs] = useState(0);
+  // Whether the currently-listening team is in a bounded "catch up" window
+  // (after the other team failed), as opposed to the initial open-ended
+  // listen. Drives the countdown display of how much bonus listening time
+  // is left.
+  const [inCatchup, setInCatchup] = useState(false);
+  const [catchupRemainingMs, setCatchupRemainingMs] = useState(0);
 
   const guessStartAtRef = useRef(0);
   // Tracks how far into the track playback has reached (ms), and the wall-clock
@@ -29,6 +35,14 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   // restarting it from 0.
   const trackPositionRef = useRef(0);
   const segmentStartAtRef = useRef(0);
+  // How long the current playback segment is allowed to run before it's
+  // capped (Infinity during the open-ended initial listen, bounded to the
+  // catch-up window otherwise) — used so a team buzzing in long after a
+  // catch-up snippet already auto-paused doesn't get credited with extra
+  // track position they never actually heard.
+  const segmentDurationCapRef = useRef(Infinity);
+  const catchupStartAtRef = useRef(0);
+  const catchupDurationMsRef = useRef(0);
   const timerIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -52,6 +66,16 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
     return () => clearInterval(timerIntervalRef.current);
   }, [roundPhase, activeTeam]);
 
+  useEffect(() => {
+    if (!inCatchup) return;
+    const tick = () => {
+      setCatchupRemainingMs(Math.max(0, catchupDurationMsRef.current - (Date.now() - catchupStartAtRef.current)));
+    };
+    tick();
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [inCatchup]);
+
   const startGame = async (winScore) => {
     try {
       setLoading(true);
@@ -74,8 +98,10 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
     setSearchInput('');
     setFilteredTracks([]);
     setRoundPhase('listening');
+    setInCatchup(false);
     trackPositionRef.current = 0;
     segmentStartAtRef.current = Date.now();
+    segmentDurationCapRef.current = Infinity;
     playFullTrack(session.currentTrack.id, 0);
   };
 
@@ -99,7 +125,9 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const handleBuzz = (team) => {
     if (roundPhase !== 'listening' || teamStatus[team] !== 'active') return;
     pause();
-    trackPositionRef.current += Date.now() - segmentStartAtRef.current;
+    const elapsedSincePlayStart = Date.now() - segmentStartAtRef.current;
+    trackPositionRef.current += Math.min(elapsedSincePlayStart, segmentDurationCapRef.current);
+    setInCatchup(false);
     setActiveTeam(team);
     guessStartAtRef.current = Date.now();
     setRoundPhase('guessing');
@@ -147,21 +175,33 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
     setFilteredTracks([]);
 
     if (updatedStatus[otherTeam] === 'active') {
-      // Resume the song for the other team from exactly where this team
-      // buzzed in, rather than restarting it — they can buzz in or skip
-      // just like the initial listening phase.
+      // The other team gets a bonus "catch up" listen — resuming exactly
+      // where this team buzzed in, bounded to how long this team's guess
+      // timer ran — and can buzz in or skip at any point during it.
+      const catchupMs = Math.max(1000, Date.now() - guessStartAtRef.current);
+      const catchupSeconds = Math.ceil(catchupMs / 1000);
+
       setActiveTeam(null);
       setRoundPhase('listening');
+
       const durationMs = gameSession.currentTrack.durationMs;
       const resumeMs = Math.min(trackPositionRef.current, Math.max(0, durationMs - 1000));
+
       segmentStartAtRef.current = Date.now();
-      playFullTrack(gameSession.currentTrack.id, resumeMs);
+      segmentDurationCapRef.current = catchupSeconds * 1000;
+      catchupStartAtRef.current = Date.now();
+      catchupDurationMsRef.current = catchupSeconds * 1000;
+      setCatchupRemainingMs(catchupSeconds * 1000);
+      setInCatchup(true);
+
+      playSnippet(gameSession.currentTrack.id, catchupSeconds, resumeMs);
     } else {
       resolveRoundFailure();
     }
   };
 
   const resolveRoundFailure = async () => {
+    setInCatchup(false);
     pause();
     try {
       const updated = await api.failDuelRound(gameSession);
@@ -268,6 +308,9 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
 
           {roundPhase === 'listening' && status === 'active' && (
             <div className="duel-panel-actions">
+              {inCatchup && (
+                <div className="duel-timer">{(catchupRemainingMs / 1000).toFixed(1)}s of song left</div>
+              )}
               <button
                 className="btn duel-buzz-btn"
                 disabled={!deviceReady}

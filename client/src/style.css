@@ -593,8 +593,8 @@ body {
 
 .duel-buzz-btn {
   font-size: 1.5rem;
-  /* 400% taller than the original calc(var(--spacing) * 1.2) ~19px padding */
-  padding: calc(var(--spacing) * 1.2 * 5) calc(var(--spacing) * 1.2);
+  /* 2.5x taller than the previous calc(var(--spacing) * 1.2 * 5) padding */
+  padding: calc(var(--spacing) * 1.2 * 5 * 2.5) calc(var(--spacing) * 1.2);
 }
 
 .duel-skip-btn {
@@ -909,7 +909,7 @@ body {
 
   .duel-buzz-btn {
     font-size: 1.1rem;
-    padding: calc(var(--spacing) * 5) var(--spacing);
+    padding: calc(var(--spacing) * 5 * 2.5) var(--spacing);
   }
 
   .duel-skip-btn {

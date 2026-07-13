@@ -207,7 +207,7 @@ export function useSpotifyPlayer(accessToken) {
     });
   };
 
-  const playSnippet = async (trackId, snippetLength) => {
+  const playSnippet = async (trackId, snippetLength, positionMs = 0) => {
     if (!trackId || !snippetLength || !deviceIdRef.current) return;
 
     // Cancel any pending auto-pause from a previous (now-stale) snippet play,
@@ -215,7 +215,7 @@ export function useSpotifyPlayer(accessToken) {
     clearTimeout(pauseTimeoutRef.current);
 
     try {
-      await sendPlayCommand(trackId);
+      await sendPlayCommand(trackId, positionMs);
 
       pauseTimeoutRef.current = setTimeout(() => {
         sendPauseCommand().catch(err => console.error('Failed to pause snippet', err));
