@@ -147,5 +147,36 @@ export const api = {
   async getHearsterSnippetLengths() {
     const response = await client.get(`${API_URL}/game/hearster/snippet-lengths`);
     return response.data;
+  },
+
+  async startDuelGame(playlistId, tracks) {
+    const response = await client.post(`${API_URL}/game/duel/start`, {
+      playlistId,
+      tracks
+    });
+    return response.data;
+  },
+
+  async guessDuel(gameSession, team, guessId) {
+    const response = await client.post(`${API_URL}/game/duel/guess`, {
+      gameSession,
+      team,
+      guessId
+    });
+    return response.data;
+  },
+
+  async placeDuelCard(gameSession, team, position) {
+    const response = await client.post(`${API_URL}/game/duel/place`, {
+      gameSession,
+      team,
+      position
+    });
+    return response.data;
+  },
+
+  async failDuelRound(gameSession) {
+    const response = await client.post(`${API_URL}/game/duel/fail-round`, { gameSession });
+    return response.data;
   }
 };

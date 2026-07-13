@@ -27,6 +27,12 @@ export function ModeSelect({ playlist, onSelectMode, onBack }) {
             <h3>Hear-ster</h3>
             <p>Guess the song Heardle-style, then place it on the timeline.</p>
           </div>
+
+          <div className="mode-card" onClick={() => onSelectMode('duel')}>
+            <div className="mode-icon">⚔️</div>
+            <h3>Duel</h3>
+            <p>Two teams race to buzz in, guess, and place songs on the timeline. First to 5 points wins.</p>
+          </div>
         </div>
       </div>
     </div>

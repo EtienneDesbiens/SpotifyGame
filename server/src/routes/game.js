@@ -436,4 +436,170 @@ router.get('/hearster/snippet-lengths', (req, res) => {
   });
 });
 
+// Duel: two teams race to buzz in on a shared song, guess it, and place it
+// on a shared timeline. First team to WIN_SCORE points wins.
+const WIN_SCORE = 5;
+
+const advanceDuelTrack = (gameSession, tracks) => {
+  const nextTrack = pickNextTrack(tracks, gameSession.usedTrackIds);
+
+  if (!nextTrack) {
+    trackCacheByGameId.delete(gameSession.gameId);
+    const { red, blue } = gameSession.scores;
+    return {
+      ...gameSession,
+      status: 'finished',
+      winner: red === blue ? null : (red > blue ? 'red' : 'blue'),
+      currentTrack: null
+    };
+  }
+
+  return {
+    ...gameSession,
+    usedTrackIds: [...gameSession.usedTrackIds, nextTrack.id],
+    currentTrack: {
+      id: nextTrack.id,
+      name: nextTrack.name,
+      artists: nextTrack.artists,
+      album: nextTrack.album,
+      durationMs: nextTrack.durationMs
+    }
+  };
+};
+
+router.post('/duel/start', async (req, res) => {
+  const { playlistId, tracks } = req.body;
+
+  if (!playlistId || !tracks || tracks.length === 0) {
+    return res.status(400).json({ error: 'Missing playlistId or tracks' });
+  }
+
+  try {
+    const seedTrack = pickNextTrack(tracks, []);
+    if (!seedTrack) throw new Error('No valid tracks with a known release year in playlist');
+
+    const nextTrack = pickNextTrack(tracks, [seedTrack.id]);
+    if (!nextTrack) throw new Error('Not enough valid tracks to start a Duel round');
+
+    const session = {
+      gameId: Math.random().toString(36).substring(7),
+      mode: 'duel',
+      playlistId,
+      timeline: [toTimelineCard(seedTrack)],
+      currentTrack: {
+        id: nextTrack.id,
+        name: nextTrack.name,
+        artists: nextTrack.artists,
+        album: nextTrack.album,
+        durationMs: nextTrack.durationMs
+      },
+      usedTrackIds: [seedTrack.id, nextTrack.id],
+      scores: { red: 0, blue: 0 },
+      status: 'playing',
+      winner: null
+    };
+
+    cacheTracks(session.gameId, tracks);
+    res.json(session);
+  } catch (error) {
+    console.error('Duel start error:', error.message);
+    res.status(400).json({ error: error.message || 'Failed to start game' });
+  }
+});
+
+router.post('/duel/guess', (req, res) => {
+  const { gameSession, team, guessId } = req.body;
+
+  if (!gameSession || !guessId || (team !== 'red' && team !== 'blue')) {
+    return res.status(400).json({ error: 'Missing gameSession, team, or guessId' });
+  }
+
+  if (gameSession.status !== 'playing') {
+    return res.status(400).json({ error: 'Game is already over' });
+  }
+
+  const isCorrect = guessId === gameSession.currentTrack.id;
+  const scores = isCorrect
+    ? { ...gameSession.scores, [team]: gameSession.scores[team] + 1 }
+    : gameSession.scores;
+
+  res.json({ ...gameSession, scores, correct: isCorrect });
+});
+
+router.post('/duel/place', (req, res) => {
+  const { gameSession, team, position } = req.body;
+
+  if (!gameSession || position === undefined || (team !== 'red' && team !== 'blue')) {
+    return res.status(400).json({ error: 'Missing gameSession, team, or position' });
+  }
+
+  if (gameSession.status !== 'playing') {
+    return res.status(400).json({ error: 'Game is already over' });
+  }
+
+  const tracks = getCachedTracks(gameSession.gameId);
+  if (!tracks) {
+    return res.status(410).json({ error: 'Game session expired, please start a new game' });
+  }
+
+  const { timeline, currentTrack } = gameSession;
+  const fullCurrentTrack = tracks.find(t => t.id === currentTrack.id);
+  const newYear = getReleaseYear(fullCurrentTrack);
+  const years = timeline.map(c => c.releaseYear);
+
+  const isCorrect =
+    (position === 0 || years[position - 1] <= newYear) &&
+    (position === timeline.length || newYear <= years[position]);
+
+  const placedCard = toTimelineCard(fullCurrentTrack);
+
+  if (!isCorrect) {
+    const advanced = advanceDuelTrack({ ...gameSession, usedTrackIds: gameSession.usedTrackIds }, tracks);
+    return res.json({ ...advanced, placed: false, revealedCard: placedCard });
+  }
+
+  const newTimeline = [...timeline, placedCard].sort((a, b) => a.releaseYear - b.releaseYear);
+  const scores = { ...gameSession.scores, [team]: gameSession.scores[team] + 1 };
+
+  if (scores[team] >= WIN_SCORE) {
+    trackCacheByGameId.delete(gameSession.gameId);
+    return res.json({
+      ...gameSession,
+      timeline: newTimeline,
+      scores,
+      status: 'finished',
+      winner: team,
+      currentTrack: null,
+      placed: true,
+      revealedCard: placedCard
+    });
+  }
+
+  const advanced = advanceDuelTrack({ ...gameSession, timeline: newTimeline, scores }, tracks);
+  res.json({ ...advanced, placed: true, revealedCard: placedCard });
+});
+
+router.post('/duel/fail-round', (req, res) => {
+  const { gameSession } = req.body;
+
+  if (!gameSession) {
+    return res.status(400).json({ error: 'Missing gameSession' });
+  }
+
+  if (gameSession.status !== 'playing') {
+    return res.status(400).json({ error: 'Game is already over' });
+  }
+
+  const tracks = getCachedTracks(gameSession.gameId);
+  if (!tracks) {
+    return res.status(410).json({ error: 'Game session expired, please start a new game' });
+  }
+
+  const fullCurrentTrack = tracks.find(t => t.id === gameSession.currentTrack.id);
+  const revealedCard = toTimelineCard(fullCurrentTrack);
+  const advanced = advanceDuelTrack(gameSession, tracks);
+
+  res.json({ ...advanced, revealedCard });
+});
+
 export const gameRouter = router;

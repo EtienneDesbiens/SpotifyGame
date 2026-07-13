@@ -527,6 +527,103 @@ body {
   color: var(--gray-light);
 }
 
+/* Duel */
+.duel-score-bar {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.duel-score-red {
+  color: #e74c3c;
+}
+
+.duel-score-blue {
+  color: #3b82f6;
+}
+
+.duel-buzzer-area {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 1.5);
+  margin-bottom: calc(var(--spacing) * 2);
+}
+
+.duel-panel {
+  border-radius: var(--radius);
+  border: 3px solid;
+  padding: var(--spacing);
+}
+
+.duel-panel-red {
+  border-color: #e74c3c;
+}
+
+.duel-panel-blue {
+  border-color: #3b82f6;
+  transform: rotate(180deg);
+}
+
+.duel-panel-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing);
+  text-align: center;
+}
+
+.duel-panel-label {
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-light);
+}
+
+.duel-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing);
+  width: 100%;
+  max-width: 320px;
+}
+
+.duel-buzz-btn {
+  font-size: 1.5rem;
+  padding: calc(var(--spacing) * 1.2);
+}
+
+.duel-skip-btn {
+  font-size: 0.9rem;
+}
+
+.duel-waiting {
+  color: var(--gray-light);
+  padding: calc(var(--spacing) * 1.5) 0;
+}
+
+.duel-guess-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing);
+  width: 100%;
+  max-width: 320px;
+}
+
+.duel-timer {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.duel-team-red {
+  color: #e74c3c;
+}
+
+.duel-team-blue {
+  color: #3b82f6;
+}
+
 .timeline-panel {
   background: var(--gray);
   border-radius: var(--radius);

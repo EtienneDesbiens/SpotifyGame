@@ -5,6 +5,7 @@ import { ModeSelect } from './pages/ModeSelect';
 import { HeardleGame } from './pages/HeardleGame';
 import { HitsterGame } from './pages/HitsterGame';
 import { HearsterGame } from './pages/HearsterGame';
+import { DuelGame } from './pages/DuelGame';
 import { useAuth } from './hooks/useAuth';
 import { useSpotifyPlayer } from './hooks/useSpotifyPlayer';
 
@@ -32,6 +33,8 @@ export default function App() {
       setCurrentPage('hitster-game');
     } else if (mode === 'hearster') {
       setCurrentPage('hearster-game');
+    } else if (mode === 'duel') {
+      setCurrentPage('duel-game');
     } else {
       setCurrentPage('heardle-game');
     }
@@ -85,6 +88,13 @@ export default function App() {
       )}
       {currentPage === 'hearster-game' && selectedPlaylist && (
         <HearsterGame
+          playlist={selectedPlaylist}
+          onBack={handleBackToModeSelect}
+          spotifyPlayer={spotifyPlayer}
+        />
+      )}
+      {currentPage === 'duel-game' && selectedPlaylist && (
+        <DuelGame
           playlist={selectedPlaylist}
           onBack={handleBackToModeSelect}
           spotifyPlayer={spotifyPlayer}
