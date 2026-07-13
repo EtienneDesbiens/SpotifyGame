@@ -20,7 +20,7 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const [lastRoundResult, setLastRoundResult] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [filteredTracks, setFilteredTracks] = useState([]);
-  const [, setTimerTick] = useState(0);
+  const [guessElapsedMs, setGuessElapsedMs] = useState(0);
 
   const guessStartAtRef = useRef(0);
   // Tracks how far into the track playback has reached (ms), and the wall-clock
@@ -38,12 +38,19 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
     };
   }, [playlist]);
 
+  // Keyed on activeTeam (not just roundPhase) so the countdown reliably
+  // restarts for the second team's guessing turn — roundPhase alone toggles
+  // 'guessing' -> 'listening' -> 'guessing' between turns, but relying only
+  // on that string was fragile; activeTeam changing is the real signal that
+  // a new turn's timer should start from zero.
   useEffect(() => {
-    if (roundPhase === 'guessing') {
-      timerIntervalRef.current = setInterval(() => setTimerTick(t => t + 1), 100);
-      return () => clearInterval(timerIntervalRef.current);
-    }
-  }, [roundPhase]);
+    if (roundPhase !== 'guessing' || !activeTeam) return;
+    setGuessElapsedMs(0);
+    timerIntervalRef.current = setInterval(() => {
+      setGuessElapsedMs(Date.now() - guessStartAtRef.current);
+    }, 100);
+    return () => clearInterval(timerIntervalRef.current);
+  }, [roundPhase, activeTeam]);
 
   const startGame = async (winScore) => {
     try {
@@ -247,7 +254,7 @@ export function DuelGame({ playlist, onBack, spotifyPlayer }) {
   const isGameOver = gameSession.status === 'finished' || roundPhase === 'game-over';
   const { timeline, currentTrack, scores } = gameSession;
   const elapsedGuessSeconds = roundPhase === 'guessing'
-    ? ((Date.now() - guessStartAtRef.current) / 1000).toFixed(1)
+    ? (guessElapsedMs / 1000).toFixed(1)
     : null;
 
   const renderPanel = (team) => {

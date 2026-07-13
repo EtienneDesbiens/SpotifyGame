@@ -8,8 +8,11 @@ import { HearsterGame } from './pages/HearsterGame';
 import { DuelGame } from './pages/DuelGame';
 import { useAuth } from './hooks/useAuth';
 import { useSpotifyPlayer } from './hooks/useSpotifyPlayer';
+import { useWakeLock } from './hooks/useWakeLock';
 
 export default function App() {
+  useWakeLock();
+
   const { accessToken, refreshToken, user, saveTokens, clearTokens } = useAuth();
   const spotifyPlayer = useSpotifyPlayer(accessToken);
   const [currentPage, setCurrentPage] = useState('login');
