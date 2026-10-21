@@ -5,7 +5,7 @@ import { Browser } from '@capacitor/browser';
 import { api } from '../api';
 
 const isNative = Capacitor.isNativePlatform();
-const REDIRECT_URI = isNative ? 'spotifyheardle://callback' : 'http://127.0.0.1:5173/callback';
+const REDIRECT_URI = isNative ? 'spotifyheardle://callback' : `${window.location.origin}/callback`;
 
 export function LoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);

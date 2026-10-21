@@ -1,6 +1,9 @@
 import './env.js';
 import express from 'express';
 import cors from 'cors';
+import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { authRouter } from './routes/auth.js';
 import { playlistRouter } from './routes/playlists.js';
 import { gameRouter } from './routes/game.js';
@@ -35,6 +38,18 @@ app.use('/api/game', gameRouter);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// Self-hosted mode: serve the built client from this same process so the web
+// app and API share one origin (no CORS, no VITE_API_URL). The fallback hands
+// every non-API GET to index.html so the OAuth redirect to /callback loads
+// the SPA.
+const clientDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../client/dist');
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get(/^\/(?!api\/|health$).*/, (req, res) => {
+    res.sendFile(resolve(clientDist, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`🎵 Server running on http://localhost:${PORT}`);

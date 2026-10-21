@@ -70,7 +70,43 @@ concurrently.
 Visit **http://127.0.0.1:5173** (not `localhost:5173` — Spotify requires the
 loopback IP for redirect URIs) and click "Login with Spotify".
 
-## Production Deployment (Render)
+## Self-hosting at home (Windows + Tailscale)
+
+One Node process serves both the API and the built client, so there is
+nothing to deploy elsewhere. Spotify requires an `https://` redirect URI and
+the Web Playback SDK needs a secure context, so Tailscale provides the HTTPS.
+
+1. Install [Tailscale](https://tailscale.com/download) on the server and on
+   every device that will play (phones, laptops); sign in to the same tailnet
+   (invite friends via *Share* / *Invite users*). In the admin console, enable
+   **MagicDNS** and **HTTPS Certificates**.
+2. Build and start the app:
+   ```powershell
+   npm install
+   npm run build        # builds client/dist
+   npm start            # serves everything on http://localhost:5000
+   ```
+3. Expose it over HTTPS on your tailnet:
+   ```powershell
+   tailscale serve --bg 5000
+   ```
+   It prints your URL, e.g. `https://my-pc.tail1234.ts.net`.
+4. In `server/.env` set both to that URL, then restart:
+   ```
+   CLIENT_URL=https://my-pc.tail1234.ts.net
+   REDIRECT_URI=https://my-pc.tail1234.ts.net/callback
+   ```
+5. In the Spotify Dashboard add `https://my-pc.tail1234.ts.net/callback` to
+   Redirect URIs.
+6. Keep it running across reboots, e.g. `npm i -g pm2 pm2-windows-startup`,
+   `pm2 start npm --name hearster -- start`, `pm2 save`. Tailscale serve
+   config persists on its own.
+
+For the Android app, set `VITE_API_URL` in `client/.env` to the tailnet URL
+before `npm run build` + `npx cap sync android`. Leave it empty for the web
+build served by this process.
+
+## Production Deployment (Render, legacy)
 
 Two separate Render services:
 
